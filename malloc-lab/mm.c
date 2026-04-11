@@ -24,11 +24,11 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "ateam",
+    "JUNGLE-12-302-7-4",
     /* First member's full name */
-    "Harry Bovik",
+    "Lee HaeGeon",
     /* First member's email address */
-    "bovik@cs.cmu.edu",
+    "atgsisu@gmail.com",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -42,8 +42,35 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+/* Basic contants and macros */
+#define WSIZE               4           /* Word and header/footer size (bytes) */
+#define DSIZE               8           /* Double word size (bytes) */
+#define CHUNKSIZE           (1 << 12)   /* Extend heap by this amount (bytes) */
+
+#define MAX(x, y)           ((x) > (y) ? (x) : (y))
+
+/* Pack a size and allocated bit into a word */
+#define PACK(size, alloc)   ((size) | (alloc))
+
+/* Read and write a word at address p */
+#define GET(p)              (*(unsigned int *) (p))
+#define PUT(p, val)         (*(unsigned int *) (p) = (val))
+
+/* Read the size and allocated fields from address p */
+#define GET_SIZE(p)         (GET(p) & (~0x07))
+#define GET_ALLOC(p)        (GET(p) & (0x01))
+
+/* Given block ptr bp, compute address of its header and footer */
+#define HDRP(bp)            ((char*) (bp) - WSIZE)
+#define FTRP(bp)            ((char*) (bp) + GET_SIZE(HDRP(bp)) - DSIZE)
+
+/* Given block ptr bp, compute address of next and previous blocks */
+#define NEXT_BLKP(bp)       ((char*) (bp) + GET_SIZE(HDRP(bp)))
+#define PREV_BLKP(bp)       ((char*) (bp) - GET_SIZE((char *)(bp) - DSIZE))
+
 /*
  * mm_init - initialize the malloc package.
+ * @return 0 (success), -1(fail)
  */
 int mm_init(void)
 {
