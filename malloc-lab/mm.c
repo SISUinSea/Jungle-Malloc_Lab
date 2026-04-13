@@ -262,6 +262,12 @@ static void *coalesce(void *bp)
 
 static void *find_fit(size_t asize)
 {
+    return first_fit(asize);
+}
+
+
+static void *first_fit(size_t asize)
+{
     /* first fit을 구현했다. */
     /* heap_listp 를 사용한다. */
     char* bp = heap_listp;
@@ -280,6 +286,12 @@ static void *find_fit(size_t asize)
     }
     /* 없다면 NULL을 반환한다. */
     return NULL;
+}
+
+
+static void *next_fit(size_t asize)
+{
+
 }
 
 
