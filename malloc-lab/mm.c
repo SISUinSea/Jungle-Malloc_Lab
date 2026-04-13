@@ -89,7 +89,7 @@ void * heap_listp = NULL;
  * next_bp는 mm_init, place, free에서 관리해야 한다.
  * [x] mm_init에서는 extend 후 첫 번째 블록을 가리켜야 한다.
  * [x] allocate 후, next_bp는 항상 현재 할당한 블록의 다음 블록을 가리켜야 한다. -> 이렇게 될 경우 next_bp가 에필로그일 경우도 고려해야 함.
- * [] free 후, next_bp는 현재 해제한 블록을 가리키거나 이전 블록을 가리킨다(prev block과 coalesce 되었을 경우).
+ * [x] free 후, next_bp는 현재 해제한 블록을 가리키거나 이전 블록을 가리킨다(prev block과 coalesce 되었을 경우).
  * [] next_fit으로 찾을 때 현재 블록부터 검색한다. epilogue에 도달했다면 next_bp 전까지 탐색한다. 탐색에 실패했다면 place할 block이 존재하지 않음으로 extend한다.
  */
 void * next_bp = NULL;
@@ -173,7 +173,7 @@ void mm_free(void *ptr)
     PUT(FTRP(ptr), PACK(size, 0));
 
     // call coalase
-    coalesce(ptr);
+    next_bp = coalesce(ptr);
 }
 
 /*
@@ -199,7 +199,7 @@ void *mm_realloc(void *ptr, size_t size)
 
 static void *extend_heap(size_t words)
 {
-    char* bp; // TODO. 나는 void*를 쓰는 줄 알았는데... 왜 char*를 써야 하는거지?
+    char* bp;
     size_t size;
     
     /* size를 8의 배수(Double word)로 맞추도록 계산(words 반올림) */
@@ -208,7 +208,7 @@ static void *extend_heap(size_t words)
     /* mem_sbrk로 heap size를 늘린다. */
     bp = mem_sbrk(size);
     if (bp == (void *) - 1) {
-        return NULL; // TODO. 왜 -1 을 반환하면 안 돼? 왜 NULL 이어야 함?
+        return NULL;
     }
 
     /* 기존의 Epilogue header를 새로운 block의 header로 만든다. */
@@ -225,7 +225,7 @@ static void *extend_heap(size_t words)
 
 static void *coalesce(void *bp)
 {
-    size_t is_prev_allocated = GET_ALLOC(HDRP(PREV_BLKP(bp))); // TODO. 둘 다 int를 썼었다. 왜 int는 안 되는거지???
+    size_t is_prev_allocated = GET_ALLOC(HDRP(PREV_BLKP(bp)));
     size_t is_next_allocated = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
     /* Case 1: prev allocated, next allocated */
@@ -311,4 +311,3 @@ static void place(void *bp, size_t asize)
     }
     next_bp = NEXT_BLKP(bp);
 }
-
