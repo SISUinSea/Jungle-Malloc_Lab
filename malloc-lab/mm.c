@@ -26,6 +26,7 @@ void *mm_realloc(void *ptr, size_t size);
 
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
+
 static void *find_fit(size_t asize);
 static void *first_fit(size_t asize);
 static void *next_fit(size_t asize);
@@ -87,7 +88,7 @@ void * heap_listp = NULL;
 /** 
  * next_bp는 mm_init, place, free에서 관리해야 한다.
  * [x] mm_init에서는 extend 후 첫 번째 블록을 가리켜야 한다.
- * [] allocate 후, next_bp는 항상 현재 할당한 블록의 다음 블록을 가리켜야 한다.
+ * [x] allocate 후, next_bp는 항상 현재 할당한 블록의 다음 블록을 가리켜야 한다. -> 이렇게 될 경우 next_bp가 에필로그일 경우도 고려해야 함.
  * [] free 후, next_bp는 현재 해제한 블록을 가리키거나 이전 블록을 가리킨다(prev block과 coalesce 되었을 경우).
  * [] next_fit으로 찾을 때 현재 블록부터 검색한다. epilogue에 도달했다면 next_bp 전까지 탐색한다. 탐색에 실패했다면 place할 block이 존재하지 않음으로 extend한다.
  */
@@ -308,5 +309,6 @@ static void place(void *bp, size_t asize)
         PUT(HDRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
     }
+    next_bp = NEXT_BLKP(bp);
 }
 
