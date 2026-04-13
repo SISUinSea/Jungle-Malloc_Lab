@@ -116,7 +116,7 @@ int mm_init(void)
     
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */ 
-    if (next_bp = (extend_heap(CHUNKSIZE/WSIZE)) == NULL) {
+    if ((next_bp = extend_heap(CHUNKSIZE/WSIZE)) == NULL) {
         return -1;
     }
     return 0;
@@ -263,7 +263,8 @@ static void *coalesce(void *bp)
 
 static void *find_fit(size_t asize)
 {
-    return first_fit(asize);
+    // return first_fit(asize);
+    return next_fit(asize);
 }
 
 
@@ -292,7 +293,25 @@ static void *first_fit(size_t asize)
 
 static void *next_fit(size_t asize)
 {
-
+    char* cur_bp = next_bp;
+    size_t size;
+    // next_bp에서 epilogue까지 allocatable block을 찾는다.
+    while ((size=GET_SIZE(HDRP(cur_bp))) != 0) {
+        if (GET_ALLOC(HDRP(cur_bp)) == 0 && size >= asize) {
+            return (void *) cur_bp;
+        }
+        cur_bp = NEXT_BLKP(cur_bp);
+    }
+    // list_headp에서 next_bp 전까지 alloactable block을 찾는다.
+    cur_bp = heap_listp;
+    while (cur_bp != next_bp) {
+        if (size >= asize) {
+            return (void *) cur_bp;
+        }
+        cur_bp = NEXT_BLKP(cur_bp);
+    }
+    
+    return NULL;    
 }
 
 
