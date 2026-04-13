@@ -174,6 +174,7 @@ void mm_free(void *ptr)
 
     // call coalase
     next_bp = coalesce(ptr);
+    // coalesce(ptr);
 }
 
 /*
@@ -305,7 +306,8 @@ static void *next_fit(size_t asize)
     // list_headp에서 next_bp 전까지 alloactable block을 찾는다.
     cur_bp = heap_listp;
     while (cur_bp != next_bp) {
-        if (size >= asize) {
+        size = GET_SIZE(HDRP(cur_bp));
+        if (GET_ALLOC(HDRP(cur_bp)) == 0 && size >= asize) {
             return (void *) cur_bp;
         }
         cur_bp = NEXT_BLKP(cur_bp);
