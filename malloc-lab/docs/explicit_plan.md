@@ -36,7 +36,7 @@
 - trace 하나를 잡아서 split/coalesce/free-list update가 어떻게 변하는지 손으로 따라갈 수 있어야 한다.
 
 
-- [ ] insert의 책임
+- [x] insert의 책임
     새롭게 생성한 free block을 free_listp로 가리켜야 한다. 
     새롭게 생성한 free block의 SUCC는 이전 free_listp 가 가리키던 포인터로 이동
     기존의 block의 PRED는 새롭게 생성한 free block을 가리켜야 한다.
@@ -44,8 +44,19 @@
     insert는 free block이 발생하는 곳에서 호출된다. 인자로는 새로운 free block의 ptr을 받아 free block에 연결하면 된다.
 
     PRED, SUCC를 저장할 공간이 없는 block을 생성해서는 안된다. 잠깐,  그건 insert의 책임이 아니다. extend_heap을 부르기 전에 extend_size를 MIN_FREE_BLOCK_SIZE보다 작아지지 않도록 바꿨다.
-- [ ] remove의 책임
-- [ ] coalesce의 책임
+    insert가 어디서 호출되어야 하지???
+    `coalesce`, `free`, `mm_init`, `place`(split 된 block을 저장해야 함)
+- [x] remove의 책임
+    remove가 어디서 호출되어야 하지??? `place`, `coalesce`
+- [ ] coalesce 수정
+    insert(새로운 블록 삽입)
+    합치기 전 기존 블록들을 삭제
+- [ ] free 수정 -> 구현 x
+    새로운 블록 추가. coalesce에서 책임을 넘기자.
+- [x] mm_init 수정
+- [ ] place 수정
+
+
 - [ ] checker 가 왜 필요한지?
 - [ ] invariant가 뭔지?
     여기서 invariant는 free list에 관련된 것을 결정해야 할 것 같음.

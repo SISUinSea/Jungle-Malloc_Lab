@@ -158,9 +158,9 @@ int mm_init(void)
     if ((next_bp = extend_heap(extend_size/WSIZE)) == NULL) {
         return -1;
     }
-    printf("sizeof bp pointer %d\n", sizeof(next_bp));
+    insert_free_block(next_bp);
     #ifdef DEBUG
-    check_block(next_bp, __LINE__);
+    mm_checkheap(__LINE__);
     #endif
     return 0;
 }
