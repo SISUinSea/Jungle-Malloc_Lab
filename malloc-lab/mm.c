@@ -137,8 +137,11 @@ void * free_listp = NULL;
  * mm_init - initialize the malloc package.
  * @return 0 (success), -1(fail)
  */
+static int init_count = 0;
 int mm_init(void)
 {
+    init_count ++;
+    free_listp = NULL;
     /* 힙의 크기를 4 * WSIZE 만큼 늘린다. */
     heap_listp = mem_sbrk(4 * WSIZE);
     if (heap_listp == (void*) - 1) {
@@ -158,7 +161,7 @@ int mm_init(void)
     if ((next_bp = extend_heap(extend_size/WSIZE)) == NULL) {
         return -1;
     }
-    insert_free_block(next_bp);
+    //insert_free_block(next_bp);
     #ifdef DEBUG
     mm_checkheap(__LINE__);
     #endif
@@ -275,41 +278,92 @@ static void *coalesce(void *bp)
     size_t size = GET_SIZE(HDRP(bp));
     /* Case 1: prev allocated, next allocated */
     if (is_prev_allocated && is_next_allocated) {
+        insert_free_block(bp);
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         return bp;
     }
     
     /* Case 2: prev allocated, next free */
     else if (is_prev_allocated && !is_next_allocated) {
+        remove_free_block(NEXT_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        insert_free_block(bp);
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         return bp;
     }
 
     /* Case 3: prev free, next allocated */
     else if (!is_prev_allocated && is_next_allocated) {
+        remove_free_block(PREV_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        insert_free_block(PREV_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         return PREV_BLKP(bp);
     }
 
     /* Case 4: prev free, next free */
     else // (!is_prev_allocated && !is_next_allocated) {
     {
+        remove_free_block(PREV_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
+        remove_free_block(NEXT_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        insert_free_block(PREV_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
         return PREV_BLKP(bp);
     }
 
 }
 
 
+/* explicit free list에서 first fit 정책을 적용한 find_fit을 구현 */
 static void *find_fit(size_t asize)
 {
+    char *bp = free_listp;
+    /* 거기서부터 해당하는 자리가 있는지 순차적으로 검색한다.*/
+    while (bp != NULL) {
+        size_t size = GET_SIZE(HDRP(bp));
+        if (size == 0) {
+            break;
+        }
+        if (asize <= size) {
+            return bp;
+        }
+
+        bp = SUCC(bp);
+    }
+    /* 없다면 NULL을 반환한다. */
+    return NULL;
+
+
+
     // return first_fit(asize);
-    return next_fit(asize);
+    // return next_fit(asize);
 }
 
 
@@ -364,8 +418,11 @@ static void *next_fit(size_t asize)
 static void place(void *bp, size_t asize)
 {
     size_t original_size = GET_SIZE(HDRP(bp));
-    
-    if (original_size - asize < DSIZE * 2) {
+    remove_free_block(bp);
+    #ifdef DEBUG
+    mm_checkheap(__LINE__);
+    #endif
+    if (original_size - asize < MIN_FREE_BLOCK_SIZE) {
         PUT(HDRP(bp), PACK(original_size, 1));
         PUT(FTRP(bp), PACK(original_size, 1));
     } else {
@@ -373,6 +430,10 @@ static void place(void *bp, size_t asize)
         PUT(FTRP(bp), PACK(asize, 1));
         PUT(HDRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
+        insert_free_block(NEXT_BLKP(bp));
+        #ifdef DEBUG
+        mm_checkheap(__LINE__);
+        #endif
     }
     next_bp = NEXT_BLKP(bp);
 }
@@ -380,12 +441,19 @@ static void place(void *bp, size_t asize)
 
 void insert_free_block(void* bp)
 {
+
+    void *pred_dbg = PRED(bp); void *succ_dbg = SUCC(bp);
     SET_PRED(bp, NULL);
     SET_SUCC(bp, free_listp);
 
     if (free_listp != NULL) {
-        SET_PRED(free_listp, bp);
+        SET_PRED(free_listp, bp); 
+        /*
+        // 본인이 free listp && bp 인 경우
+        pred, succ를 본인 주소를 적었음
+        */
     }
+
     
     free_listp = bp;
 }
@@ -444,6 +512,8 @@ static void check_block(void *bp, int lineno) {
        - minimum block size
     */
 
+    void *pred_dbg = PRED(bp); void *succ_dbg = SUCC(bp);
+
     /* alignment check */
     if( ((long) bp & 0x7) != 0) {
         fail_check(lineno, "alignment가 일치하지 않습니다.", bp);
@@ -490,7 +560,12 @@ static void check_free_list(int lineno) {
     cur = free_listp;
     /* while  안에 여러 if 문들을 둔다는 아이디어는 내가 처음 떠올리지는 못햇다. gpt의 구현을 힐끗 보고 혼자 쳐보기는 했다....*/
     while (cur != NULL) {
-        if (seen >= free_block_count) {
+        volatile void *pred_dbg = NULL;
+        volatile void *succ_dbg = NULL;
+
+        pred_dbg = PRED(cur);
+        succ_dbg = SUCC(cur);
+        if (seen > free_block_count) {
             fail_check(lineno, "free list 순회가 비정상입니다. (cycle / duplicate / stale)", cur);
         }
         
@@ -505,6 +580,7 @@ static void check_free_list(int lineno) {
 
         // 모든 노드에 대해서 pred/succ local consistency를 확인한다.
         if (PRED(cur) != prev) {
+            void * predecessor = PRED(cur);
             fail_check(lineno, "cur의 predecessor가 잘못 연결되어 있습니다.", cur);
         }
         if (SUCC(cur) != NULL && PRED(SUCC(cur)) != cur) {
@@ -587,6 +663,7 @@ static void mm_checkheap(int lineno) {
 
     /* heap 전체 순회 */
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        void *pred_dbg = PRED(bp); void *succ_dbg = SUCC(bp);
         check_block(bp, lineno);
     }
 
