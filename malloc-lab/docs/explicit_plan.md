@@ -37,6 +37,13 @@
 
 
 - [ ] insert의 책임
+    새롭게 생성한 free block을 free_listp로 가리켜야 한다. 
+    새롭게 생성한 free block의 SUCC는 이전 free_listp 가 가리키던 포인터로 이동
+    기존의 block의 PRED는 새롭게 생성한 free block을 가리켜야 한다.
+
+    insert는 free block이 발생하는 곳에서 호출된다. 인자로는 새로운 free block의 ptr을 받아 free block에 연결하면 된다.
+
+    PRED, SUCC를 저장할 공간이 없는 block을 생성해서는 안된다. 잠깐,  그건 insert의 책임이 아니다. extend_heap을 부르기 전에 extend_size를 MIN_FREE_BLOCK_SIZE보다 작아지지 않도록 바꿨다.
 - [ ] remove의 책임
 - [ ] coalesce의 책임
 - [ ] checker 가 왜 필요한지?

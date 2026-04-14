@@ -35,6 +35,11 @@ static void *next_fit(size_t asize);
 
 static void place(void *bp, size_t asize);
 
+
+/* explicit 을 위한 함수들*/
+void insert_free_block(void* bp);
+void remove_free_block(void* bp);
+
 #ifdef DEBUG
 static void mm_checkheap(int lineno);
 static void check_block(void *bp, int lineno);
@@ -148,9 +153,9 @@ int mm_init(void)
     /* head_listp 포인터는 Prologue header와 footer 사이에 위치시키기 */
     heap_listp += (2 * WSIZE);
     
-
+    int extend_size = MAX(CHUNKSIZE, MIN_FREE_BLOCK_SIZE);
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */ 
-    if ((next_bp = extend_heap(CHUNKSIZE/WSIZE)) == NULL) {
+    if ((next_bp = extend_heap(extend_size/WSIZE)) == NULL) {
         return -1;
     }
     printf("sizeof bp pointer %d\n", sizeof(next_bp));
@@ -191,6 +196,7 @@ void *mm_malloc(size_t size)
     }
     /* 없다면 큰 블록을 새롭게 할당받기 */
     expendsize = MAX(asize, CHUNKSIZE);
+    expendsize = MAX(expendsize, MIN_FREE_BLOCK_SIZE);
     bp = extend_heap(expendsize / WSIZE);
     if (bp == NULL) {
         return NULL;
@@ -369,6 +375,55 @@ static void place(void *bp, size_t asize)
         PUT(FTRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
     }
     next_bp = NEXT_BLKP(bp);
+}
+
+
+void insert_free_block(void* bp)
+{
+    SET_PRED(bp, NULL);
+    SET_SUCC(bp, free_listp);
+
+    if (free_listp != NULL) {
+        SET_PRED(free_listp, bp);
+    }
+    
+    free_listp = bp;
+}
+
+
+void remove_free_block(void* bp)
+{
+    
+    /* edge case는 다음과 같음. 삭제하려는 block이
+        1. header 인 경우
+        2. trailer 인 경우
+        3. 둘 다인 경우
+    */
+
+    // 3. 둘 다
+    if (PRED(bp) == NULL && SUCC(bp) == NULL) {
+        free_listp = NULL;
+    }
+
+    // 1. header
+    else if (PRED(bp) == NULL) {
+        free_listp = SUCC(bp);
+        SET_PRED(free_listp, NULL);
+
+    }
+    // 2. trailer
+    else if (SUCC(bp) == NULL) {
+        SUCC(PRED(bp)) = NULL;
+    }
+
+    // 일반적인 case
+    else {
+        SUCC(PRED(bp)) = SUCC(bp);
+        PRED(SUCC(bp)) = PRED(bp);
+    }
+
+    SET_PRED(bp, NULL);
+    SET_SUCC(bp, NULL);
 }
 
 
