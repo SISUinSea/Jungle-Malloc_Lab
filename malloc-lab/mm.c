@@ -9,6 +9,8 @@
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
  */
+#define DEBUG
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -32,6 +34,13 @@ static void *first_fit(size_t asize);
 static void *next_fit(size_t asize);
 
 static void place(void *bp, size_t asize);
+
+#ifdef DEBUG
+static void mm_checkheap(int lineno);
+static void check_block(void *bp, int lineno);
+static void check_free_list(int lineno);
+static void check_heap_free_vs_list(int lineno);
+#endif
 
 
 /*********************************************************
@@ -84,6 +93,24 @@ team_t team = {
 #define NEXT_BLKP(bp)       ((char*) (bp) + GET_SIZE(HDRP(bp)))
 #define PREV_BLKP(bp)       ((char*) (bp) - GET_SIZE((char *)(bp) - DSIZE))
 
+
+/* ==========================================================
+    MACRO for explicit
+*/
+#define MIN_FREE_BLOCK_SIZE     WSIZE * 2 + sizeof(void*) * 2
+
+#define PRED_FIELD(bp)          ((char*) (bp))
+#define SUCC_FIELD(bp)          ((char*) (bp) + sizeof(void*))
+
+#define PRED(bp)                (*(void **)(PRED_FIELD(bp)))
+#define SUCC(bp)                (*(void **)(SUCC_FIELD(bp)))
+
+#define SET_PRED(bp, p)         (*(void **)(PRED_FIELD(bp))) = (p)
+#define SET_SUCC(bp, p)         (*(void **)(SUCC_FIELD(bp))) = (p)
+
+
+
+
 void * heap_listp = NULL;
 /** 
  * next_bp는 mm_init, place, free에서 관리해야 한다.
@@ -93,6 +120,13 @@ void * heap_listp = NULL;
  * [] next_fit으로 찾을 때 현재 블록부터 검색한다. epilogue에 도달했다면 next_bp 전까지 탐색한다. 탐색에 실패했다면 place할 block이 존재하지 않음으로 extend한다.
  */
 void * next_bp = NULL;
+
+
+/**
+ * global variable for explicit
+ */
+void * free_listp = NULL;
+
 
 /*
  * mm_init - initialize the malloc package.
@@ -119,6 +153,10 @@ int mm_init(void)
     if ((next_bp = extend_heap(CHUNKSIZE/WSIZE)) == NULL) {
         return -1;
     }
+    printf("sizeof bp pointer %d\n", sizeof(next_bp));
+    #ifdef DEBUG
+    check_block(next_bp, __LINE__);
+    #endif
     return 0;
 }
 
@@ -332,3 +370,172 @@ static void place(void *bp, size_t asize)
     }
     next_bp = NEXT_BLKP(bp);
 }
+
+
+
+#ifdef DEBUG
+#include <stdio.h>
+#include <stdlib.h>
+
+static void fail_check(int lineno, const char *msg, void *bp) {
+    fprintf(stderr, "[CHECK FAIL] line=%d bp=%p: %s\n", lineno, bp, msg);
+    exit(1);
+}
+
+static void check_block(void *bp, int lineno) {
+    /* 
+       - alignment
+       - free block일 때 header/footer 일치
+       - minimum block size
+    */
+
+    /* alignment check */
+    if( ((long) bp & 0x7) != 0) {
+        fail_check(lineno, "alignment가 일치하지 않습니다.", bp);
+    }
+    
+    /* free block일 때 header/footer 일치 */
+    if (GET_ALLOC(HDRP(bp)) == 0) {
+        size_t header = GET(HDRP(bp));
+        size_t footer = GET(FTRP(bp));
+
+        if (header != footer) {
+            fail_check(lineno, "header, footer가 일치하지 않습니다.", bp);
+        }
+
+        if (GET_SIZE(HDRP(bp)) < MIN_FREE_BLOCK_SIZE) {
+           fail_check(lineno, "block 이 explicit memory allocation을 사용하기에는 너무 작습니다.", bp);
+        }
+    }
+
+    
+}
+
+static void check_free_list(int lineno) {
+    /* 
+       - free list 순회 가능?
+       - 같은 노드 2번 방문 안 함?
+       - pred/succ local consistency
+    */
+
+    // heap 전체를 순회하면서 free block 개수 카운트
+    int free_block_count = 0;
+    int seen = 0;
+
+    void * cur = heap_listp;
+    void * prev = NULL;
+    while (GET_SIZE(HDRP(cur)) != 0) {
+        if (GET_ALLOC(HDRP(cur)) == 0) {
+            free_block_count ++;
+        }
+        
+        cur = NEXT_BLKP(cur);
+    }
+
+    cur = free_listp;
+    /* while  안에 여러 if 문들을 둔다는 아이디어는 내가 처음 떠올리지는 못햇다. gpt의 구현을 힐끗 보고 혼자 쳐보기는 했다....*/
+    while (cur != NULL) {
+        if (seen >= free_block_count) {
+            fail_check(lineno, "free list 순회가 비정상입니다. (cycle / duplicate / stale)", cur);
+        }
+        
+        if (GET_ALLOC(HDRP(cur)) == 1) {
+            fail_check(lineno, "free list에 allocated block이 존재합니다.", cur);
+        }
+
+        if (GET(HDRP(cur)) != GET(FTRP(cur))) {
+            fail_check(lineno, "free block의 header, footer가 일치하지 않습니다.", cur);
+        }
+        // 같은 노드를 두 번 방문하는지 확인한다. -> 방문한 block의 주소를 적어놓고, 해당 주소가 중복되어서 나오는지 확인한다....?????? 어떻게 C로 구현하지?/? -> 방문 개수가 같으면 없다고 가정하자.
+
+        // 모든 노드에 대해서 pred/succ local consistency를 확인한다.
+        if (PRED(cur) != prev) {
+            fail_check(lineno, "cur의 predecessor가 잘못 연결되어 있습니다.", cur);
+        }
+        if (SUCC(cur) != NULL && PRED(SUCC(cur)) != cur) {
+            fail_check(lineno, "cur의 successor가 잘못 연결되어 있습니다.", cur);
+        }
+
+        prev = cur;
+        cur = SUCC(cur);
+        seen ++;
+    }
+
+    if (seen != free_block_count) {
+        fail_check(lineno, "free list 순회가 비정상입니다. (cycle / duplicate / stale)", cur);
+    }
+    
+}
+
+static int is_in_free_list(void* target) {
+    void* cur = free_listp;
+    while (cur != NULL) {
+        if (cur == target) {
+            return 1;
+        }
+        cur = SUCC(cur);
+    }
+
+    return 0;
+}
+
+static int is_valid_free_block(void * target) {
+    void * cur = heap_listp;
+
+    while (GET_SIZE(HDRP(cur)) != 0) {
+        if (cur == target) {
+            return (GET_ALLOC(HDRP(cur)) == 0);
+        }
+
+        cur = NEXT_BLKP(cur);
+    }
+
+    return 0;
+}
+
+
+static void check_heap_free_vs_list(int lineno) {
+    /* TODO:
+       - heap의 free block들과 free list 원소 대응
+       - 누락 / 중복 / stale block 검사
+       - immediate coalescing이면 인접 free block 금지
+    */
+   void * cur = heap_listp;
+   while (GET_SIZE(HDRP(cur)) != 0) {
+        if (GET_ALLOC(HDRP(cur)) == 0) {
+            if (!is_in_free_list(cur)) {
+                fail_check(lineno, "힙에 존재하는 free block이 list에 존재하지 않습니다.", cur);
+            }
+
+            // coalesce 되어서 사라진 block이 free list에 존재하지 않았는지 확인(next 블록이 free 면 fail)
+            if (GET_SIZE(HDRP(cur)) != 0 && GET_ALLOC(HDRP(NEXT_BLKP(cur))) == 0) {
+                fail_check(lineno, "힙에 연속된 free block이 존재합니다.", cur);
+            }
+        }
+        cur = NEXT_BLKP(cur);
+   }
+
+   cur = free_listp;
+   
+    // free list에 있는 block이 heap에 정상적으로 존재하는지 확인
+    while (cur != NULL) {
+        if (!is_valid_free_block(cur)) {
+            fail_check(lineno, "free list에 비정상 free block이 존재합니다.", cur);
+        }
+        
+        cur = SUCC(cur);
+    }
+}
+
+static void mm_checkheap(int lineno) {
+    void *bp;
+
+    /* heap 전체 순회 */
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        check_block(bp, lineno);
+    }
+
+    check_free_list(lineno);
+    check_heap_free_vs_list(lineno);
+}
+#endif
