@@ -9,7 +9,7 @@
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
  */
-#define DEBUG
+// #define DEBUG
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -288,9 +288,6 @@ static void *coalesce(void *bp)
     /* Case 2: prev allocated, next free */
     else if (is_prev_allocated && !is_next_allocated) {
         remove_free_block(NEXT_BLKP(bp));
-        #ifdef DEBUG
-        mm_checkheap(__LINE__);
-        #endif
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -304,9 +301,6 @@ static void *coalesce(void *bp)
     /* Case 3: prev free, next allocated */
     else if (!is_prev_allocated && is_next_allocated) {
         remove_free_block(PREV_BLKP(bp));
-        #ifdef DEBUG
-        mm_checkheap(__LINE__);
-        #endif
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -321,13 +315,7 @@ static void *coalesce(void *bp)
     else // (!is_prev_allocated && !is_next_allocated) {
     {
         remove_free_block(PREV_BLKP(bp));
-        #ifdef DEBUG
-        mm_checkheap(__LINE__);
-        #endif
         remove_free_block(NEXT_BLKP(bp));
-        #ifdef DEBUG
-        mm_checkheap(__LINE__);
-        #endif
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
@@ -419,9 +407,9 @@ static void place(void *bp, size_t asize)
 {
     size_t original_size = GET_SIZE(HDRP(bp));
     remove_free_block(bp);
-    #ifdef DEBUG
-    mm_checkheap(__LINE__);
-    #endif
+    // #ifdef DEBUG
+    // mm_checkheap(__LINE__);
+    // #endif
     if (original_size - asize < MIN_FREE_BLOCK_SIZE) {
         PUT(HDRP(bp), PACK(original_size, 1));
         PUT(FTRP(bp), PACK(original_size, 1));
@@ -431,11 +419,17 @@ static void place(void *bp, size_t asize)
         PUT(HDRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(original_size - asize, 0));
         insert_free_block(NEXT_BLKP(bp));
-        #ifdef DEBUG
-        mm_checkheap(__LINE__);
-        #endif
+// #ifdef DEBUG
+// mm_checkheap(__LINE__);
+// #endif
     }
+
+
+    // assert(0==0);  // TODO. assert는 호출 전, 호출 후에 어떤 상황이어야 하는지를 선언하는 식으로 사용
     next_bp = NEXT_BLKP(bp);
+    #ifdef DEBUG
+    mm_checkheap(__LINE__);
+    #endif
 }
 
 
